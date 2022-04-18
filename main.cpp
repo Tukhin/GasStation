@@ -1,5 +1,4 @@
 
-
 #include <iostream>
 #include <vector>
 #include <string>
@@ -35,9 +34,6 @@ std::mutex mtx;
 
 std::mutex pump1mtx;
 std::mutex pump2mtx;
-std::mutex read_pump1mtx;
-std::mutex read_pump2mtx;
-
 
 struct Car {
     int numFillups = 0;
@@ -49,13 +45,6 @@ struct GasPump {
     int id;
     bool isPumping = false;
 };
-
-//void MultiThread(vector<GasPump> &pumps, Car &car) {
-//    thread t1(fillUpCar(pumps, car));
-//}
-//
-//
-
 
 bool canPump(vector<GasPump> &pumps) {
     pump1mtx.lock();
@@ -76,7 +65,7 @@ bool canPump(vector<GasPump> &pumps) {
 
 
 void successfullyFilledUpCar(vector<GasPump> &pumps, Car &car, deque<Car>& cars) {
-    cout << "Filling up car with id " << car.id << endl;
+
     pump1mtx.lock();
     auto& pump1 = pumps.at(0);
     pump1mtx.unlock();
@@ -86,11 +75,9 @@ void successfullyFilledUpCar(vector<GasPump> &pumps, Car &car, deque<Car>& cars)
     auto& pump2 = pumps.at(1);
     pump2mtx.unlock();
 
-    cout << "Did we ever get here?";
 
     if (!pump1.isPumping)  {
         pump1mtx.lock();
-        cout << "Pump1 is pumping" << endl;
         pump1.isPumping = true;
         pump1mtx.unlock();
 
@@ -117,7 +104,6 @@ void successfullyFilledUpCar(vector<GasPump> &pumps, Car &car, deque<Car>& cars)
 
     mtx.lock();
     cars.push_back(car);
-    cout << "pump1 fillups " << pump1.numFillups << "pump2 fillups " << pump2.numFillups << endl;
     mtx.unlock();
 }
 
@@ -160,32 +146,38 @@ int main() {
 
     for(int i = 0; i < cars.size(); i++) {
         cars[i].id = i;
-        cout << "We have car id " << cars[i].id << endl;
     }
 
     vector<GasPump> pumps(2);
     for(int i = 0; i < pumps.size(); i++) {
         pumps[i].id = i;
-        cout << "We have pump id " << pumps[i].id << endl;
     }
 
     auto finish = chrono::system_clock::now() + 0.05min;
     std::vector<std::thread> thread_vec;
+
     do {
         mtx.lock();
         auto& car = cars.front();
         cars.pop_front();
         mtx.unlock();
 
-        while(!canPump(pumps)) {
-
-        }
-
+        /**
+         * We use a while loop here to block until either one of the pumps are avaible
+         * Then we create the thread for the next car to go
+         * */
+       while(!canPump(pumps)) {}
        thread_vec.push_back(thread(successfullyFilledUpCar, ref(pumps), ref(car), ref(cars)));
     } while(chrono::system_clock::now() < finish);
 
+    cout << "Size of thread vec: " << thread_vec.size() << endl;
+
+    /**
+     * We block for all the threads to finish
+     * The main reason is that cars can still be at the pump
+     */
     for(int i = 0; i < thread_vec.size(); i++) {
-      thread_vec[i].join();
+      thread_vec[i].join(); // this will wait until the thread is done
     }
 
     printCarStats(cars);
